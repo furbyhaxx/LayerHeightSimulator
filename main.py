@@ -1,8 +1,10 @@
 import numpy as np
 import trimesh
 import os
+from pathlib import Path
 
 trimesh.util.attach_to_log()
+
 
 def save_png(slice_2D, file):
     import matplotlib.pyplot as plt
@@ -34,29 +36,36 @@ def save_png(slice_2D, file):
         plt.plot(*discrete.T, **fmt)
         plt.savefig(file)
 
+
 input_file = "input/fels_full.stl"
-output_folder = "./output/fels_full/"
-
-mesh = trimesh.load(input_file)
-bounds = mesh.bounding_box.extents  # array(x,y,z)
-
-# slice_start = 0
-# slice_end = 800
-# layer_height = 5.0  #mm
 
 config = {
-    'slice_start': 0,
-    'slice_end': 800,
+    'slice_start': 5,
+    'slice_end': 810,
     'layer_height': 5.0,
     'export': {
-        'stl': True,  # export stl file
-        'single_slices_in_stl': False,  # should stl file contain a single body for each slice or be combined into one body?
-                                        # False needs OpenSCAD and is much slower
-        'png': False, # export png for each slice
+        'stl': False,  # export stl file
+        'single_slices_in_stl': True,
+        'export_both': False,
+        # should stl file contain a single body for each slice or be combined into one body?
+        # False needs OpenSCAD and is much slower
+        'png': False,  # export png for each slice
         'svg': True,  # export svg for each slice
         'dxf': True,  # export dxf for each slice
     }
 }
+
+# END CONFIG
+############################
+
+project_name = Path(input_file).stem
+output_folder = f'./output/{project_name}/'
+
+mesh = trimesh.load(input_file)
+bounds = mesh.bounding_box.extents  # array(x,y,z)
+
+if not os.path.exists(f'{output_folder}/'):
+    os.makedirs(f'{output_folder}/')
 
 current = config['slice_start']
 meshes = []
@@ -70,22 +79,22 @@ while current < config['slice_end']:
     if slice is not None:
         slice2d, to_3D = slice.to_planar()
         if config['export']['png']:
-            if not os.path.exists('output/png/'):
-                os.makedirs('output/png/')
-            save_png(slice2d, f'output/png/{current}.png')
+            if not os.path.exists(f'{output_folder}/png/'):
+                os.makedirs(f'{output_folder}/png/')
+            save_png(slice2d, f'{output_folder}/png/{current}.png')
 
         if config['export']['dxf']:
-            if not os.path.exists('output/dxf/'):
-                os.makedirs('output/dxf/')
-            slice2d.export(f'output/dxf/{current}.dxf')
+            if not os.path.exists(f'{output_folder}/dxf/'):
+                os.makedirs(f'{output_folder}/dxf/')
+            slice2d.export(f'{output_folder}/dxf/{current}.dxf')
 
         if config['export']['svg']:
-            if not os.path.exists('output/svg/'):
-                os.makedirs('output/svg/')
-            slice2d.export(f'output/svg/{current}.svg')
+            if not os.path.exists(f'{output_folder}/svg/'):
+                os.makedirs(f'{output_folder}/svg/')
+            slice2d.export(f'{output_folder}/svg/{current}.svg')
 
         # slice_2D.export('output/svg/' + str(current) + '.svg')
-        extrusion = slice2d.extrude(height=config['layer_height']+0.05)
+        extrusion = slice2d.extrude(height=config['layer_height'] + 0.05)
 
         if type(extrusion) is list:
             tmp_meshes = []
@@ -103,14 +112,14 @@ while current < config['slice_end']:
 
     current = current + config['layer_height']
 
-if config['export']['stl'] and config['export']['single_slices_in_stl']:
+if config['export']['stl'] and config['export']['single_slices_in_stl'] or config['export']['export_both']:
     print("Generating single bodies in STL")
     combined = trimesh.util.concatenate(meshes)
-    combined.export('output/fels_comb.stl')
-elif config['export']['stl'] and not config['export']['single_slices_in_stl']:
+    combined.export(f'{output_folder}/{project_name}_bodies.stl')
+if config['export']['stl'] and not config['export']['single_slices_in_stl'] or config['export']['export_both']:
     print("Combining bodies in STL")
-    comb2 = meshes[0].union(meshes[1:], engine='scad')
-    comb2.export('output/fels_comb_test.stl')
+    comb2 = meshes[0].union(meshes[1:], engine='scad', debug=True)
+    comb2.export(f'{output_folder}/{project_name}_combined.stl')
 
 # combined = trimesh.util.concatenate(meshes)
 # combined.export('output/fels2.stl')
